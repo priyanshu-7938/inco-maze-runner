@@ -85,7 +85,7 @@ contract MazeGame {
                     euint256 enc = encryptedMaze[idx];
                     e.requestDecryption(
                         enc,
-                        this.storeDecrypted.selector,
+                        this.callback.selector,
                         abi.encode(idx)
                     );
                 }
@@ -93,10 +93,11 @@ contract MazeGame {
         }
     }
 
-    function storeDecrypted(
+    function callback(
+        euint256 id,
         uint256 val,
         bytes memory callbackData
-    ) external onlyEnclave {
+    ) external {
         uint idx = abi.decode(callbackData, (uint));
         publicMaze[idx] = uint8(val); // 0 = wall, 1 = path
     }

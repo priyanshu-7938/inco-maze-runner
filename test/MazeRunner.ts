@@ -9,18 +9,18 @@ import {
   parseAbiItem,
 } from "viem";
 import contractAbi from "../artifacts/contracts/MazeRunner.sol/MazeGame.json";
+import libContract from "../artifacts/@inco/lightning/src/Lib.sol/e.json";
 import { HexString } from "@inco/js/dist/binary";
 // @ts-ignore
 import { Lightning } from '@inco/js/lite';
 import { printMazeFromBytes } from "../utils/mazeutils";
+import { patchBytecode } from "../utils/patch"; 
 describe("Maze- Runner test", function () {
   let MazeContract: any;
   let contractAddress: Address;
   let incoConfig: any;
   let playerPosition: any = [1,1];
-  let reEncryptorForMainWallet: any;
-  let reEncryptorForAliceWallet: any;
-  let reEncryptorForBobWallet: any;
+  let libAddress : any;
 
   before(async function () {
     const chainId = publicClient.chain.id;           // e.g. 84532 or 31337
@@ -30,16 +30,43 @@ describe("Maze- Runner test", function () {
     }else{
       incoConfig = Lightning.latest('testnet', 84532); 
     }
-    const txHash = await wallet.deployContract({
-      abi: contractAbi.abi,
-      bytecode: contractAbi.bytecode as HexString,
-      args: [9,9],
+    // deploy the lib: 
+    const txn = await wallet.deployContract({
+      abi: libContract.abi,
+      bytecode: libContract.bytecode as HexString,
     });
+    const librec = await publicClient.waitForTransactionReceipt({
+      hash: txn,
+    });
+    libAddress = librec.contractAddress as Address;
+    console.log('✅ Library deployed at:', libAddress);
+    if(contractAbi.bytecode.includes("__$")){
 
-    const receipt = await publicClient.waitForTransactionReceipt({
-      hash: txHash,
-    });
-    contractAddress = receipt.contractAddress as Address;
+      const patchedBytecode = patchBytecode(
+        contractAbi.bytecode as string,
+        contractAbi.linkReferences,
+        libAddress
+      );
+      const txHash = await wallet.deployContract({
+        abi: contractAbi.abi,
+        bytecode: patchedBytecode as HexString,
+        args: [9,9],
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: txHash,
+      });
+      contractAddress = receipt.contractAddress as Address;
+    }else{
+      const txHash = await wallet.deployContract({
+        abi: contractAbi.abi,
+        bytecode: contractAbi.bytecode as HexString,
+        args: [9,9],
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: txHash,
+      });
+      contractAddress = receipt.contractAddress as Address;
+    }
     console.log(`✅ Contract deployed at: ${contractAddress}`);
     // first we wannt uplaod the maze to the contract firstg we generate a maze: of size 15 by 15....
     // Maze has to have the field 1,1 non zero i.e it has to be a empty place so that one can start game from there....
@@ -60,6 +87,7 @@ describe("Maze- Runner test", function () {
         [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
       ];
+    // starting point 1,1. need to be a one.
     MazeContract = getContract({
       address: contractAddress as HexString,
       abi: contractAbi.abi,
@@ -94,8 +122,6 @@ describe("Maze- Runner test", function () {
   });
   it("Shold Print the Maze view for location 1,1", async function () {
     const mazeView = await MazeContract.read.viewMapWindow([playerPosition[0],playerPosition[1]]);
-    console.log("Maze view:", mazeView);
-    // conmvertig to bytes: 
     printMazeFromBytes(mazeView);
   });
 
