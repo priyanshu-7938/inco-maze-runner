@@ -1,5 +1,5 @@
-# **Inco Lite - Hardhat Template**
-
+# **Inco Lite - ERROR IMAGE**
+![Alt text](https://raw.githubusercontent.com/priyanshu-7938/inco-maze-runner/refs/heads/main/image.png)
 This repository provides a **complete Hardhat setup** for testing **reencryption, decryption, and ciphertext formation** in smart contracts.
 
 ## **Setup Instructions**
