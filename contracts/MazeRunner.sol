@@ -3,7 +3,10 @@ pragma solidity ^0.8.24;
 
 import "@inco/lightning/src/Lib.sol";
 
+
 contract MazeGame {
+    using e for *;
+
     uint public rows;
     uint public cols;
 
@@ -18,6 +21,13 @@ contract MazeGame {
 
     // Price to reveal a 9x9 area
     uint public cellRevealCost = 0.01 ether;
+    
+    // ARBITARY:
+    
+    mapping(uint256 => uint) public pendingDecryptions; // requestId => maze index
+    event AreaRevealRequested(address indexed player, uint centerIndex, uint radius);
+    
+    // ARBITARY ENDS:
 
     modifier onlyEnclave() {
         require(msg.sender == address(e), "Not authorized");
@@ -33,18 +43,16 @@ contract MazeGame {
         return row * cols + col;
     }
 
-    // code to upload the maze to the contract.... step by step....    
     function uploadEncryptedCell(uint row, uint col, bytes calldata encryptedValue) external {
         uint i = index(row, col);
         if(row == 1 && col == 1) {
-            playerCheckpoint[msg.sender] = i; // set initial checkpoint
-            publicMaze[i] = 1; // mark the starting point as path
+            playerCheckpoint[msg.sender] = i;
+            publicMaze[i] = 1;
         }
         euint256 mazeValue = e.newEuint256(encryptedValue, msg.sender);
         encryptedMaze[i] = mazeValue;
     }
 
-    // move the check point to a new position....
     function moveCheckpoint(uint[] calldata pathDirections) external {
         uint current = playerCheckpoint[msg.sender];
         uint r = current / cols;
@@ -64,17 +72,19 @@ contract MazeGame {
         playerCheckpoint[msg.sender] = index(r, c);
     }
 
-    // opening new area in maze....
     function revealAreaAroundCheckpoint() external payable {
-        require(msg.value >= cellRevealCost);
+        require(msg.value >= cellRevealCost, "Insufficient funds to reveal area");
 
         uint center = playerCheckpoint[msg.sender];
         uint r = center / cols;
         uint c = center % cols;
-
-        // int radius = 4;
-        int radius = 2;// to keep it small baby...
-
+        
+        int radius = 2;
+        
+        uint requestCount = 0;
+        
+        emit AreaRevealRequested(msg.sender, center, uint(radius));
+        
         for (int dr = -radius; dr <= radius; dr++) {
             for (int dc = -radius; dc <= radius; dc++) {
                 int nr = int(r) + dr;
@@ -83,23 +93,31 @@ contract MazeGame {
                 if (nr >= 0 && nr < int(rows) && nc >= 0 && nc < int(cols)) {
                     uint idx = index(uint(nr), uint(nc));
                     euint256 enc = encryptedMaze[idx];
-                    e.requestDecryption(
+                    require(e.isAllowed(msg.sender, enc), "Not allowed to reveal this cell");
+                    uint256 requestId = e.requestDecryption(
                         enc,
-                        this.callback.selector,
+                        this.decryptionCallback.selector,
                         abi.encode(idx)
                     );
+                    pendingDecryptions[requestId] = idx;
+                    requestCount++;
                 }
             }
         }
+        
+        require(requestCount > 0, "No cells to reveal");
     }
 
-    function callback(
-        euint256 id,
-        uint256 val,
-        bytes memory callbackData
+    function decryptionCallback(
+        uint256 requestId,
+        uint256 result,
+        bytes memory data
     ) external {
-        uint idx = abi.decode(callbackData, (uint));
-        publicMaze[idx] = uint8(val); // 0 = wall, 1 = path
+        require(msg.sender == address(e), "Unauthorized callback");
+        uint idx = abi.decode(data, (uint));
+        require(pendingDecryptions[requestId] == idx, "Unknown decryption request");
+        publicMaze[idx] = uint8(result);
+        delete pendingDecryptions[requestId];
     }
 
     // funciton to fetch maze area....
