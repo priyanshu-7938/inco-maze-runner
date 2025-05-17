@@ -97,7 +97,8 @@ contract MazeGame {
                     uint256 requestId = e.requestDecryption(
                         enc,
                         this.decryptionCallback.selector,
-                        abi.encode(idx)
+                        // abi.encode(idx)
+                        ""
                     );
                     pendingDecryptions[requestId] = idx;
                     requestCount++;
@@ -110,14 +111,15 @@ contract MazeGame {
 
     function decryptionCallback(
         uint256 requestId,
-        uint256 result,
+        bytes32 result,
         bytes memory data
-    ) external {
-        require(msg.sender == address(e), "Unauthorized callback");
-        uint idx = abi.decode(data, (uint));
-        require(pendingDecryptions[requestId] == idx, "Unknown decryption request");
-        publicMaze[idx] = uint8(result);
-        delete pendingDecryptions[requestId];
+    ) public returns (bool){
+        // require(msg.sender == address(e), "Unauthorized callback");
+        // uint idx = abi.decode(data, (uint));
+        // require(pendingDecryptions[requestId] == idx, "Unknown decryption request");
+        // publicMaze[idx] = uint8(uint256(result));
+        // delete pendingDecryptions[requestId];
+        return true;
     }
 
     // funciton to fetch maze area....
